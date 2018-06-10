@@ -16,7 +16,7 @@ namespace pocCachingApi.BusinessLayer.SQLiteLayer
             _conn = new SqliteConnection("Data Source=C:\\PocCaching.db;");
         }
 
-        public async Task<SqliteResponse<VisuCalcul>> GetVisuCalculByVisuId(string id, string query)
+        public async Task<SqliteResponse<VisuCalcul>> GetVisuCalculByVisuId(string id)
         {
             var response = new SqliteResponse<VisuCalcul>();
             string statment = $"SELECT * FROM visuCalcul WHERE visu_id LIKE '{id}'";
