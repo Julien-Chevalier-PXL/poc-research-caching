@@ -1,2 +1,3 @@
 # poc-research-caching
-Research project - @PXL 2018
+Research project - Julien Chevalier 
+Professional Bachelor Applied Information Technology @PXL - 2018
