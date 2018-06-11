@@ -25,7 +25,7 @@
             Console.WriteLine($"Process time: {elapsedMs.ToString()} ms");
             Console.WriteLine("----------------------------------------------");
             
-            if (result.isValid)
+            if (result.IsValid)
             {
                 if (result.Result != null)
                 {

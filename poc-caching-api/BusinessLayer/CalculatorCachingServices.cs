@@ -8,6 +8,7 @@ namespace pocCachingApi.BusinessLayer
     using pocCachingApi.BusinessLayer.ElasticLayer;
     using pocCachingApi.BusinessLayer.Models;
     using pocCachingApi.BusinessLayer.RabbitMQLayer;
+    using pocCachingApi.BusinessLayer.RedisLayer;
     using pocCachingApi.BusinessLayer.RedisLayer.Models;
     using pocCachingApi.BusinessLayer.SQLiteLayer;
     using ServiceStack;
@@ -27,67 +28,43 @@ namespace pocCachingApi.BusinessLayer
             {
                 if (sqlResult.Result != null)
                 {
-                    response.isValid = true;
-                    var visu_id = sqlResult.Result.Id;
-
-                    var manager = new RedisManagerPool("localhost:6379");
-                    using (var client = manager.GetClient())
+                    var redisService = new RedisService("localhost:6379", sqlResult.Result.Id);
+                    var cachedData = redisService.GetCachedData();
+                    if (cachedData != null)
                     {
-                        var cachedData = client.Get<CalculationResponse>(visu_id.ToString());
-                        if (cachedData != null)
+                        response.IsValid = true;
+                        response.Result = cachedData;
+                    }
+                    else
+                    {
+                        var elasticService = new ElasticService();
+                        var elasticResponse = await elasticService.GetData();
+                        if (elasticResponse.IsValid)
                         {
-                            response.Result = cachedData;
+                            Console.WriteLine($"[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - {elasticResponse.Result.Count} docs retrieved from elasticearch");
+
+                            var redisOnMessage = redisService.InitializeRedisPubSub();
+
+                            // SEND TO RABBITMQ
+                            RabbitMQService.SendToQueue(sqlResult.Result, elasticResponse.Result);
+
+                            Console.WriteLine("[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - Waiting for response of reddis.");
+                            var redisResult = await redisOnMessage;
+                            response.Result = redisResult;
+                            response.IsValid = true;
+                            return response;
                         }
                         else
                         {
-                            var elasticService = new ElasticService();
-                            var elasticResponse = await elasticService.GetData();
-                            if (elasticResponse.IsValid)
-                            {
-                                Console.WriteLine($"[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - {elasticResponse.Result.Count} docs retrieved from elasticearch");
-
-                                // Initialize listening to Redis server
-                                List<Task> tasks = new List<Task>();
-                                tasks.Add(new Task(() =>
-                                {
-                                    for (int i = 0; i < 1; i++)
-                                    {
-                                    }
-                                }));
-
-                                var psRedisServer = new RedisPubSubServer(manager, visu_id.ToString())
-                                {
-                                    OnMessage = (channel, msg) =>
-                                    {
-                                        tasks.Add(Task.Run(() =>
-                                        {
-                                            Console.WriteLine($"Received '{msg}' from channel '{channel}'");
-                                            var longList = JsonConvert.DeserializeObject<CalculationResponse>(msg);
-                                            response.Result = longList;
-                                            tasks.ElementAt(0).Start();
-                                        }));                                        
-                                    }
-                                }.Start();
-
-                                // SEND TO RABBITMQ
-                                RabbitMQService.SendToQueue(sqlResult.Result, elasticResponse.Result);
-
-                                Console.WriteLine("[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - Waiting for response of reddis.");
-                                await Task.WhenAll(tasks);
-                                Console.WriteLine("[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - All tasks done.");
-                                response.isValid = true;
-                            }
-                            else
-                            {
-                                response.Message = elasticResponse.Message;
-                                Console.WriteLine($"[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - {elasticResponse.Message}");
-                            }
+                            response.Message = elasticResponse.Message;
+                            Console.WriteLine($"[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - {elasticResponse.Message}");
                         }
                     }
+
                 }
                 else
                 {
-                    response.isValid = true;
+                    response.IsValid = true;
                     response.Message = sqlResult.Message;
                     Console.WriteLine($"[pocCachingApi.BusinessLayer.CalculatorCachingService] GetResults - {sqlResult.Message}");
                 }

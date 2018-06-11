@@ -7,7 +7,7 @@ namespace pocCachingApi.BusinessLayer.Models
     public class CalculatorCachingResponse
     {
         public CalculationResponse Result { get; set; }
-        public bool isValid { get; set; } = false;
+        public bool IsValid { get; set; } = false;
         public string Message { get; set; }
     }
 }
